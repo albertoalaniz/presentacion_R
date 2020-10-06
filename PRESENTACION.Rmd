@@ -1,0 +1,228 @@
+---
+title: "Plantas invasoras en ecosistemas altoandinos"
+author: "Alberto Alaniz"
+date: "10/5/2020"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(MuMIn)
+library(mgcv)
+library(dplyr)
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+library(ggpubr)
+
+DATA <-read.csv("https://raw.githubusercontent.com/albertoalaniz/presentacion_R/main/DATOS_INVASORAS_FINAL.csv")
+DATA$ALT <- as.factor(DATA$ALT)
+```
+
+# Introducción
+
+## Invasiones biológicas
+- Origen y concepto
+- Proceso de invasión
+
+```{r,out.width="550px", fig.align="center"}
+knitr::include_graphics("https://i.ibb.co/kgmCJdn/INVASORES.jpg")
+```
+
+## Sistemas altoandinos
+
+- Ecosistemas fragiles
+- Predominio de especies bajas
+- Factores limitantes
+
+```{r,out.width="550px", fig.align="center"}
+knitr::include_graphics("https://www.andeshandbook.org/media/route_gallery/14748566172000563421.JPG")
+```
+
+## Monumento Natural El Morado, RM
+
+- 3.009 m^2^
+- 93 km de Santiago
+
+```{r,out.width="550px", fig.align="center"}
+knitr::include_graphics("https://1.bp.blogspot.com/-wiZ_gA8lrRo/WSIsaILvTbI/AAAAAAAAKxc/5RT1msO8dtMC1IWRNdC3MLPLDTng3ZMDgCLcB/s1600/Screen%2BShot%2B2017-05-21%2Bat%2B21.09.29.png")
+```
+
+## 
+**Pregunta**
+
+- _¿Cuales son los efectos de las plantas invasoras sobre la comunidad de plantas nativas en el ecosistema altoandino?_
+- _¿Existen otros factores (altitud, distancia al sendero, pendiente) que modulen el efecto de las invasoras sobre la comunidad de plantas nativas en ecosistemas altoandinos?_
+
+**Hipótesis**
+
+_Debido a las caracteristicas generalistas y a la amplitud de nicho que las especies invasoras manifiedtan, se espera que exista una correlación negativa entre su abundancia y la diversidad de plantas nativas. Por otro lado, este efecto podría incrementarse con la cercanía a senderos y reducirce con la elevación_
+
+# Metodología
+
+## Toma de datos en terreno
+
+- 190 parcelas
+- 3 elevaciones (1980, 2110 y 2240 m)
+
+```{r,out.width="400px", fig.align="center"}
+knitr::include_graphics("https://i.ibb.co/8XvLYMn/muestreo.png")
+```
+
+## Análisis de datos
+
+<div class="columns-2">
+
+**Variables predictoras**
+
+- Abundancia de invasoras
+- Distancia a caminos, elevación
+- Pendiente
+- Suelo desnudo
+- Cobertura de arbustivas y herbaceas
+
+**Variables respuesta**
+
+- Riqueza de especies nativas
+- Diversidad de Shannon
+
+</div>
+
+## Modelo aditivo generalizado {.smaller}
+
+
+```{r, echo=TRUE, include=TRUE}
+
+M_Rich <- gam(Rich~ Inv + BS + HEB + SCH + SLP + DIST + ALT, 
+              family=gaussian(link = "identity"), data=DATA)
+
+Shannon <- gam(Shan~ Inv + BS + HEB + SCH + SLP + DIST + ALT, 
+               family=gaussian(link = "identity"), data=DATA)
+
+```
+
+- Seleccion de modelos utilizando mediante AICc
+- Función Dredge
+
+# Resultados
+
+```{r, include=FALSE}
+options(na.action = "na.fail") 
+Best_Rich<-dredge(M_Rich, rank= AICc)
+Best_Shan<-dredge(Shannon, rank= AICc)
+
+Best_Rich_t<-subset(Best_Rich, delta < 2); 
+Best_Rich_ta<-as.data.frame(Best_Rich_t)
+dd1<-Best_Rich_ta[,2:(which(colnames(Best_Rich_ta)=="df")-1) ]
+
+MoD<-c()
+for(g in 1:NROW(dd1)){
+  Line<-as.vector(dd1[g,]) 
+  xn<- which(is.na(Line))
+  if(NROW(xn)==0) {xn<-colnames(Line)} else {xn<-colnames(Line[-xn]) }
+  xn<- paste(xn, collapse= "+")
+  MoD<-c(MoD,xn)           }
+dd1<-cbind(MoD,Best_Rich_ta[,which(colnames(Best_Rich_ta)=="df"):which(colnames(Best_Rich_ta)=="weight")])
+
+
+if(NROW(Best_Rich_t)>1) {Coeff<-model.avg(Best_Rich_t)} else {Coeff<-model.avg(Best_Rich) }
+sum.coef_rich<- as.data.frame(summary(Coeff)$coefmat.subset)
+sum.coef_rich<- round(sum.coef_rich[-1,], 5); colnames(sum.coef_rich)[ncol(sum.coef_rich)]<-"pval"
+
+
+Shannon_t<-subset(Best_Shan, delta < 2); 
+Shannon_ta<-as.data.frame(Shannon_t)
+dd2<-Shannon_ta[,2:(which(colnames(Shannon_ta)=="df")-1) ]
+
+MoD<-c()
+for(g in 1:NROW(dd2)){
+  Line<-as.vector(dd2[g,]) 
+  xn<- which(is.na(Line))
+  if(NROW(xn)==0) {xn<-colnames(Line)} else {xn<-colnames(Line[-xn]) }
+  xn<- paste(xn, collapse= "+")
+  MoD<-c(MoD,xn)           }
+dd2<-cbind(MoD,Shannon_ta[,which(colnames(Shannon_ta)=="df"):which(colnames(Shannon_ta)=="weight")])
+
+
+if(NROW(Shannon_t)>1) {Coeff<-model.avg(Shannon_t)} else {Coeff<-model.avg(Best_Shan) }
+sum.coef_shan<- as.data.frame(summary(Coeff)$coefmat.subset)
+sum.coef_shan<- round(sum.coef_shan[-1,], 5); colnames(sum.coef_shan)[ncol(sum.coef_shan)]<-"pval"
+names(sum.coef_shan)
+
+```
+
+## Riqueza {.smaller}
+
+- Coeficientes ponderados entre los modelos
+
+```{r Tabla riqueza}
+kable(sum.coef_rich) %>% kable_styling(bootstrap_options = c("striped"))
+```
+
+
+## Diversidad de Shannon {.smaller}
+
+- Coeficientes ponderados entre los modelos
+
+```{r Tabla Shannon}
+kable(sum.coef_shan) %>% kable_styling(bootstrap_options = c("striped"))
+```
+
+## Relación con especies invasoras {.smaller}
+```{r,  warning=FALSE, echo=FALSE, include=TRUE}
+suppressMessages(riq<- ggplot(DATA, aes(x = Inv, y = Rich)) +
+  geom_smooth(method = "lm", fill = "red", alpha = 0.5) +
+  geom_point()+
+  labs(y="Riqueza de plantas", x="Abundancia de invasoras"))
+
+suppressMessages(shano<- ggplot(DATA, aes(x = Inv, y = Shan)) +
+  geom_smooth(method = "lm", fill = "blue", alpha = 0.5) +
+  geom_point()+
+  labs(y="Diversidad de plantas", x="Abundancia de invasoras"))
+
+suppressMessages(arb<- ggplot(DATA, aes(x = SCH, y = Shan)) +
+  geom_smooth(method = "lm", fill = "Green", alpha = 0.5) +
+  geom_point()+
+  labs(y="Diversidad de plantas", x="Cobertura de arbustivas"))
+
+```
+```{r figura, warning=FALSE, echo=FALSE, include=TRUE, fig.align='center'}
+suppressMessages(ggarrange(riq, shano, arb + rremove("x.text"), 
+          labels = c("A", "B", "C"),
+          ncol = 3, nrow = 1))
+```
+
+
+## Relación con la elevación
+```{r nuevo,  warning=FALSE, echo=FALSE, include=TRUE}
+
+suppressMessages(nat<- ggplot(DATA, aes(x = ALT, y = Rich)) + 
+  geom_jitter(aes(color = ALT)) +
+  geom_boxplot()+
+  labs(y="Riqueza de plantas nativas", x="Elevación"))
+
+suppressMessages(inva<- ggplot(DATA, aes(x = ALT, y = Inv)) + 
+  geom_jitter(aes(color = ALT)) +
+  geom_boxplot()+
+  labs(y="Abundancia de invasoras", x="Elevación"))
+
+```
+```{r figura1, warning=FALSE, echo=FALSE, include=TRUE, fig.align='center'}
+suppressMessages(ggarrange(nat, inva + rremove("x.text"), 
+          labels = c("A", "B"),
+          ncol = 2, nrow = 1))
+```
+
+
+## Conclusión
+
+- Relación inversa entre nativas e invasoras
+- Efecto positivo de arbustivas
+- Efecto positivo de la elevacion
+
+```{r,out.width="500px", fig.align="center"}
+knitr::include_graphics("https://www.wkndheroes.com/wp-content/uploads/2016/02/15392717541_0a763b38f6_k-1280x640.jpg")
+```
+
+# Muchas gracias
